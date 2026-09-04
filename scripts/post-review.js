@@ -136,6 +136,8 @@ module.exports = async function postReview({ github, context, core, reportPath, 
   }
 }
 
+module.exports.parseDiff = parseDiff
+
 async function deleteStaleComments({ github, owner, repo, pull_number, core }) {
   try {
     const existing = await github.paginate(github.rest.pulls.listReviewComments, {

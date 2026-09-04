@@ -1,0 +1,11 @@
+{
+  "name": "papyrus-lint-action",
+  "private": true,
+  "description": "GitHub Action that lints Papyrus (.psc) scripts with papyrus-lint.",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
