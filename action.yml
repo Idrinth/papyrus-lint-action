@@ -1,5 +1,5 @@
 name: 'Papyrus Lint'
-description: 'Lints Papyrus (.psc) scripts with Papyrus Lint (https://github.com/Idrinth/papyrus-lint) and, on pull requests, posts the findings as a review.'
+description: 'Lints Papyrus (.psc) scripts with Papyrus Lint and, on pull requests, posts the findings as a review.'
 author: 'Idrinth'
 branding:
   icon: 'check-circle'
