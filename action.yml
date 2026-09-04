@@ -37,6 +37,10 @@ inputs:
     description: 'Whether to fail this step when PapyrusLinterCLI exits non-zero (see fail_on_warning/fail_on_info in papyrus-lint.yaml).'
     required: false
     default: 'true'
+  cache-ast:
+    description: 'Whether to cache PapyrusLinterCLIs on-disk AST cache (parsed .psc scripts, stored in an ast-cache directory) between workflow runs, so unchanged scripts are not re-parsed. Restores each tracked .psc files last-commit modification time first, since the AST cache is keyed by content hash and mtime together.'
+    required: false
+    default: 'true'
 
 outputs:
   success:
@@ -52,6 +56,42 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Restore .psc modification times for the AST cache
+      if: inputs['cache-ast'] == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          echo "::warning::Not inside a git checkout; skipping AST cache timestamp restore."
+          exit 0
+        fi
+        git log --name-only --diff-filter=ACMR --format=$'\x01%ct' -- '*.psc' | awk '
+          BEGIN { RS = "\x01" }
+          $0 != "" {
+            n = split($0, lines, "\n")
+            ts = lines[1]
+            for (i = 2; i <= n; i++) {
+              f = lines[i]
+              if (f != "" && !(f in seen)) {
+                seen[f] = 1
+                print ts "\t" f
+              }
+            }
+          }
+        ' | while IFS=$'\t' read -r ts file; do
+          [ -f "$file" ] && touch -d "@${ts}" "$file" || true
+        done
+
+    - name: Restore AST cache
+      if: inputs['cache-ast'] == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ast-cache
+        key: papyrus-ast-cache-${{ runner.os }}-${{ inputs.version }}-${{ hashFiles('**/*.psc') }}
+        restore-keys: |
+          papyrus-ast-cache-${{ runner.os }}-${{ inputs.version }}-
+          papyrus-ast-cache-${{ runner.os }}-
+
     - name: Download PapyrusLinterCLI
       id: download
       shell: bash

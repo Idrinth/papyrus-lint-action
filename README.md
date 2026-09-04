@@ -44,6 +44,7 @@ is set to `false`.
 | `create-review` | no | `true` | Whether to post a pull request review on `pull_request` events. |
 | `review-event` | no | `AUTO` | `AUTO` (`REQUEST_CHANGES` on failure, otherwise `COMMENT`), `COMMENT`, or `REQUEST_CHANGES`. |
 | `fail-on-problems` | no | `true` | Whether to fail the step when the lint run exits non-zero. |
+| `cache-ast` | no | `true` | Whether to cache `PapyrusLinterCLI`'s on-disk AST cache between workflow runs, so unchanged scripts skip re-parsing. |
 
 ## Outputs
 
@@ -58,6 +59,29 @@ is set to `false`.
 Each run deletes review comments it previously posted (identified by a
 hidden marker) before posting fresh ones, so re-running the workflow after
 pushing a fix doesn't pile up stale comments.
+
+## Speeding up repeated runs with the AST cache
+
+`PapyrusLinterCLI` keeps an on-disk cache of parsed script ASTs (an
+`ast-cache` directory next to the binary), reused whenever a script's content
+and modification time still match a cached entry. Since `actions/checkout`
+resets every file's modification time to the moment of checkout, that cache
+would never hit across separate workflow runs on its own. When `cache-ast` is
+`true` (the default), this action:
+
+1. Restores each tracked `.psc` file's modification time to the timestamp of
+   the commit that last changed it, so the CLI's cache can recognize unchanged
+   scripts across runs.
+2. Persists the `ast-cache` directory between workflow runs with
+   [`actions/cache`](https://github.com/actions/cache), scoped by runner OS
+   and the `version` input.
+
+Because step 1 only sees the commit history available in your checkout, use
+`actions/checkout` with `fetch-depth: 0` (or another sufficiently large depth)
+to get the full benefit across commits that only touch a few files; with the
+default shallow checkout, caching still works but mostly helps when the same
+commit is linted more than once (e.g. re-run workflows or multiple jobs on
+the same commit). Set `cache-ast` to `false` to disable both steps entirely.
 
 ## Supported runners
 
