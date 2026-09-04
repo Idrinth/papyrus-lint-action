@@ -65,6 +65,16 @@ pushing a fix doesn't pile up stale comments.
 the action picks the matching `PapyrusLinterCLI` release asset for the
 runner's OS.
 
+## Development
+
+The pull request review logic in `scripts/post-review.js` has unit tests
+under `tests/`, run with:
+
+```sh
+npm install
+npm test
+```
+
 ## License
 
 MIT
