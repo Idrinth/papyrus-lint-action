@@ -1,0 +1,141 @@
+name: 'Papyrus Lint'
+description: 'Lints Papyrus (.psc) scripts with Papyrus Lint (https://github.com/Idrinth/papyrus-lint) and, on pull requests, posts the findings as a review.'
+author: 'Idrinth'
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  path:
+    description: 'Path to the .achlist (or a single .psc file) to lint, relative to the repository root.'
+    required: true
+  version:
+    description: 'papyrus-lint release tag to download the PapyrusLinterCLI binary from (e.g. "v1.4.0"). Defaults to the latest release.'
+    required: false
+    default: 'latest'
+  config:
+    description: 'Path to a papyrus-lint.yaml/.yml config file, passed as --config.'
+    required: false
+    default: ''
+  script-root:
+    description: 'Newline-separated list of extra script root directories, each passed as its own --script-root flag.'
+    required: false
+    default: ''
+  github-token:
+    description: 'Token used to fetch the pull request diff and post the review. Defaults to the workflow token.'
+    required: false
+    default: ${{ github.token }}
+  create-review:
+    description: 'Whether to post lint findings as a pull request review when running on a pull_request event.'
+    required: false
+    default: 'true'
+  review-event:
+    description: 'Review event to submit when findings exist: AUTO (REQUEST_CHANGES if the run fails its configured thresholds, otherwise COMMENT), COMMENT, or REQUEST_CHANGES.'
+    required: false
+    default: 'AUTO'
+  fail-on-problems:
+    description: 'Whether to fail this step when PapyrusLinterCLI exits non-zero (see fail_on_warning/fail_on_info in papyrus-lint.yaml).'
+    required: false
+    default: 'true'
+
+outputs:
+  success:
+    description: 'Whether the lint run succeeded under the configured failure thresholds ("true"/"false").'
+    value: ${{ steps.lint.outputs.success }}
+  total-diagnostics:
+    description: 'Total number of diagnostics reported.'
+    value: ${{ steps.lint.outputs['total-diagnostics'] }}
+  report-path:
+    description: 'Path to the JSON report written by PapyrusLinterCLI.'
+    value: ${{ steps.lint.outputs['report-path'] }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download PapyrusLinterCLI
+      id: download
+      shell: bash
+      env:
+        LINT_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        case "${{ runner.os }}" in
+          Linux) asset="PapyrusLinterCLI-linux"; bin="./PapyrusLinterCLI" ;;
+          macOS) asset="PapyrusLinterCLI-macos"; bin="./PapyrusLinterCLI" ;;
+          Windows) asset="PapyrusLinterCLI-windows.exe"; bin="./PapyrusLinterCLI.exe" ;;
+          *) echo "::error::Unsupported runner OS: ${{ runner.os }}"; exit 1 ;;
+        esac
+        if [ "${LINT_VERSION}" = "latest" ]; then
+          url="https://github.com/Idrinth/papyrus-lint/releases/latest/download/${asset}"
+        else
+          url="https://github.com/Idrinth/papyrus-lint/releases/download/${LINT_VERSION}/${asset}"
+        fi
+        echo "Downloading ${url}"
+        curl -sSL -f -o "${bin}" "${url}"
+        chmod +x "${bin}" || true
+        echo "bin=${bin}" >> "$GITHUB_OUTPUT"
+
+    - name: Run PapyrusLinterCLI
+      id: lint
+      shell: bash
+      env:
+        LINT_PATH: ${{ inputs.path }}
+        CONFIG_PATH: ${{ inputs.config }}
+        SCRIPT_ROOTS: ${{ inputs['script-root'] }}
+        BIN: ${{ steps.download.outputs.bin }}
+      run: |
+        set -uo pipefail
+        args=(--json --output papyrus-lint-report.json)
+        if [ -n "${CONFIG_PATH}" ]; then
+          args+=(--config "${CONFIG_PATH}")
+        fi
+        if [ -n "${SCRIPT_ROOTS}" ]; then
+          while IFS= read -r root; do
+            [ -n "$root" ] && args+=(--script-root "$root")
+          done <<< "${SCRIPT_ROOTS}"
+        fi
+        args+=("${LINT_PATH}")
+        echo "Running: ${BIN} ${args[*]}"
+        set +e
+        "${BIN}" "${args[@]}"
+        exit_code=$?
+        set -e
+
+        if [ -f papyrus-lint-report.json ]; then
+          success=$(jq -r '.success' papyrus-lint-report.json)
+          total=$(jq -r '.total_diagnostics' papyrus-lint-report.json)
+          echo "report-path=papyrus-lint-report.json" >> "$GITHUB_OUTPUT"
+        else
+          echo "::error::PapyrusLinterCLI did not produce a report (exit code ${exit_code})."
+          success="false"
+          total="0"
+        fi
+        echo "success=${success}" >> "$GITHUB_OUTPUT"
+        echo "total-diagnostics=${total}" >> "$GITHUB_OUTPUT"
+        echo "exit-code=${exit_code}" >> "$GITHUB_OUTPUT"
+
+    - name: Post pull request review
+      if: inputs['create-review'] == 'true' && github.event_name == 'pull_request' && steps.lint.outputs['report-path'] != ''
+      uses: actions/github-script@v7
+      env:
+        REPORT_PATH: ${{ steps.lint.outputs['report-path'] }}
+        REVIEW_EVENT: ${{ inputs['review-event'] }}
+        ACTION_PATH: ${{ github.action_path }}
+      with:
+        github-token: ${{ inputs['github-token'] }}
+        script: |
+          const postReview = require(`${process.env.ACTION_PATH}/scripts/post-review.js`)
+          await postReview({
+            github,
+            context,
+            core,
+            reportPath: process.env.REPORT_PATH,
+            reviewEvent: process.env.REVIEW_EVENT,
+          })
+
+    - name: Fail on problems
+      if: inputs['fail-on-problems'] == 'true' && steps.lint.outputs.success == 'false'
+      shell: bash
+      run: |
+        echo "::error::Papyrus Lint reported ${{ steps.lint.outputs['total-diagnostics'] }} diagnostic(s) that fail the configured thresholds."
+        exit 1
