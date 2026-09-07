@@ -99,6 +99,10 @@ npm install
 npm test
 ```
 
+Issues are to be posted in the "parent" repository
+[Papyrus Lint](https://github.com/idrinth/papyrus-lint) since this is where
+they likely originate.
+
 ## License
 
 MIT
