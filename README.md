@@ -37,7 +37,7 @@ is set to `false`.
 | Name | Required | Default | Description |
 | --- | --- | --- | --- |
 | `path` | yes | | Path to the `.achlist` (or a single `.psc` file) to lint. |
-| `version` | no | `latest` | papyrus-lint release tag to download `PapyrusLinterCLI` from. |
+| `version` | no | `latest` | papyrus-lint release tag to download `PapyrusLinterCLI` from. For 2.0 and above, the action runs `PapyrusLinterCLI lint …`. |
 | `config` | no | | Path to a `papyrus-lint.yaml`/`.yml` config file, passed as `--config`. |
 | `script-root` | no | | Newline-separated extra script root directories, each passed as `--script-root`. |
 | `github-token` | no | `${{ github.token }}` | Token used to fetch the PR diff and post the review. |

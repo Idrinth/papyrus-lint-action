@@ -120,12 +120,24 @@ runs:
       shell: bash
       env:
         LINT_PATH: ${{ inputs.path }}
+        LINT_VERSION: ${{ inputs.version }}
         CONFIG_PATH: ${{ inputs.config }}
         SCRIPT_ROOTS: ${{ inputs['script-root'] }}
         BIN: ${{ steps.download.outputs.bin }}
       run: |
         set -uo pipefail
-        args=(--json --output papyrus-lint-report.json)
+        args=()
+        # PapyrusLinterCLI 2.0 and above lint via an explicit `lint` subcommand.
+        cli_version=$("${BIN}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
+        if [ -z "${cli_version}" ] && [ "${LINT_VERSION}" != "latest" ]; then
+          cli_version="${LINT_VERSION#v}"
+        fi
+        cli_major="${cli_version%%.*}"
+        if [[ "${cli_major}" =~ ^[0-9]+$ ]] && [ "${cli_major}" -ge 2 ]; then
+          args+=(lint)
+        fi
+        echo "Detected PapyrusLinterCLI version: ${cli_version:-unknown}"
+        args+=(--json --output papyrus-lint-report.json)
         if [ -n "${CONFIG_PATH}" ]; then
           args+=(--config "${CONFIG_PATH}")
         fi
