@@ -129,8 +129,12 @@ runs:
         args=()
         # PapyrusLinterCLI 2.0 and above lint via an explicit `lint` subcommand.
         cli_version=$("${BIN}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
-        if [ -z "${cli_version}" ] && [ "${LINT_VERSION}" != "latest" ]; then
-          cli_version="${LINT_VERSION#v}"
+        if [ -z "${cli_version}" ]; then
+          if [ "${LINT_VERSION}" = "latest" ]; then
+            cli_version="2.0.0"
+          else
+            cli_version="${LINT_VERSION#v}"
+          fi
         fi
         cli_major="${cli_version%%.*}"
         if [[ "${cli_major}" =~ ^[0-9]+$ ]] && [ "${cli_major}" -ge 2 ]; then
