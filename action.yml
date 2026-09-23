@@ -120,12 +120,32 @@ runs:
       shell: bash
       env:
         LINT_PATH: ${{ inputs.path }}
+        LINT_VERSION: ${{ inputs.version }}
         CONFIG_PATH: ${{ inputs.config }}
         SCRIPT_ROOTS: ${{ inputs['script-root'] }}
         BIN: ${{ steps.download.outputs.bin }}
       run: |
         set -uo pipefail
-        args=(--json --output papyrus-lint-report.json)
+        args=()
+        # PapyrusLinterCLI 2.0 and above lint via an explicit `lint` subcommand
+        # and `--format json`. `latest` is always 2.x after this action is
+        # merged; pinned tags use the version input as-is.
+        use_v2=false
+        if [ "${LINT_VERSION}" = "latest" ]; then
+          use_v2=true
+        else
+          cli_major="${LINT_VERSION#v}"
+          cli_major="${cli_major%%.*}"
+          if [[ "${cli_major}" =~ ^[0-9]+$ ]] && [ "${cli_major}" -ge 2 ]; then
+            use_v2=true
+          fi
+        fi
+        if [ "${use_v2}" = true ]; then
+          args+=(lint --format json)
+        else
+          args+=(--json)
+        fi
+        args+=(--output papyrus-lint-report.json)
         if [ -n "${CONFIG_PATH}" ]; then
           args+=(--config "${CONFIG_PATH}")
         fi
