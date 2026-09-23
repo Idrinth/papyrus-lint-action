@@ -127,21 +127,25 @@ runs:
       run: |
         set -uo pipefail
         args=()
-        # PapyrusLinterCLI 2.0 and above lint via an explicit `lint` subcommand.
-        cli_version=$("${BIN}" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)
-        if [ -z "${cli_version}" ]; then
-          if [ "${LINT_VERSION}" = "latest" ]; then
-            cli_version="2.0.0"
-          else
-            cli_version="${LINT_VERSION#v}"
+        # PapyrusLinterCLI 2.0 and above lint via an explicit `lint` subcommand
+        # and `--format json`. `latest` is always 2.x after this action is
+        # merged; pinned tags use the version input as-is.
+        use_v2=false
+        if [ "${LINT_VERSION}" = "latest" ]; then
+          use_v2=true
+        else
+          cli_major="${LINT_VERSION#v}"
+          cli_major="${cli_major%%.*}"
+          if [[ "${cli_major}" =~ ^[0-9]+$ ]] && [ "${cli_major}" -ge 2 ]; then
+            use_v2=true
           fi
         fi
-        cli_major="${cli_version%%.*}"
-        if [[ "${cli_major}" =~ ^[0-9]+$ ]] && [ "${cli_major}" -ge 2 ]; then
-          args+=(lint)
+        if [ "${use_v2}" = true ]; then
+          args+=(lint --format json)
+        else
+          args+=(--json)
         fi
-        echo "Detected PapyrusLinterCLI version: ${cli_version:-unknown}"
-        args+=(--json --output papyrus-lint-report.json)
+        args+=(--output papyrus-lint-report.json)
         if [ -n "${CONFIG_PATH}" ]; then
           args+=(--config "${CONFIG_PATH}")
         fi
